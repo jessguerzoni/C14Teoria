@@ -1,41 +1,102 @@
 # .github/workflows/maven-ci.yml
 
-name: Java CI (Banco) com Maven
+name: Pipeline de Integração Completo
 
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
-jobs:
-  build:
-    
+env:
+  # Variável de Ambiente para o nome do arquivo JAR/pacote
+  JAR_FILE: banco-1.0-SNAPSHOT.jar
 
-    
+jobs:
+  # -----------------------------------------------------
+  # JOB 1: TESTES UNITÁRIOS
+  # Roda a fase de teste e armazena os relatórios
+  # -----------------------------------------------------
+  tests:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Checkout do Código
-        uses: actions/checkout@v4
-
-      - name: 2. Configurar o JDK 21
+      - uses: actions/checkout@v4
+      - name: Setup JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
 
-      - name: 3. Construir, Testar e Instalar (Executa Testes Unitários)
+      - name: Executar Testes Unitários
+        # Usa 'test' para garantir que apenas os testes rodem.
+        run: mvn -B test
 
-        run: mvn -B install
-
-      - name: 4. Publicar Relatórios de Teste (Resultados do Surefire)
-
-        if: always()
+      - name: Armazenar Relatórios de Teste (Artefato)
         uses: actions/upload-artifact@v4
         with:
-          name: Relatórios de Teste Unitário
+          name: Relatorios-Testes
           path: target/surefire-reports
-          retention-days: 5
+          retention-days: 7
 
+  # -----------------------------------------------------
+  # JOB 2: BUILD E EMPACOTAMENTO
+  # Depende do sucesso do job 'tests'.
+  # Roda EM PARALELO com o job de Notificação (Notify)
+  # -----------------------------------------------------
+  package:
+    needs: [tests] # Só executa se os testes passarem
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Empacotar o Projeto
+        # Roda 'package' para gerar o JAR
+        run: mvn -B package -DskipTests=true
+
+      - name: Armazenar Pacote JAR (Artefato)
+        # Armazena o pacote JAR gerado
+        uses: actions/upload-artifact@v4
+        with:
+          name: Pacote-Build
+          path: target/${{ env.JAR_FILE }}
+          retention-days: 7
+
+  # -----------------------------------------------------
+  # JOB 3: NOTIFICAÇÃO (E-MAIL)
+  # Roda EM PARALELO com o job 'package'.
+  # -----------------------------------------------------
+  notify:
+    needs: [tests] # Só executa se os testes passarem
+    if: success() || failure() # Executa independentemente do status do build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configurar Endereço de E-mail
+        # Requisito 3.e: Define a variável de ambiente EMAIL_DESTINO
+        # O valor 'MY_EMAIL_SECRET' deve ser configurado nas GitHub Secrets!
+        run: echo "EMAIL_DESTINO=${{ secrets.MY_EMAIL_SECRET }}" >> $GITHUB_ENV
+
+      - name: Enviar Notificação por E-mail (Script)
+        # Requisito 3.d: Usa um script (Shell simples) para enviar o e-mail
+        # Você pode substituir isso por um action de e-mail, mas o requisito pede um script.
+        run: |
+          STATUS=${{ job.status }}
+          EMAIL_BODY="Pipeline executado com sucesso! Status: $STATUS. Veja o log em ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          
+          
+          
+          echo "De: GitHub Actions"
+          echo "Para: ${{ env.EMAIL_DESTINO }}"
+          echo "Assunto: Status do Pipeline do Banco - $STATUS"
+          echo "Corpo: $EMAIL_BODY"
+          echo "--- SIMULANDO ENVIO ---"
+          
