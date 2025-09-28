@@ -11,8 +11,7 @@ on:
 jobs:
   build:
     
-    # As permissões não são mais necessárias se o passo 5 for removido,
-    # mas mantê-las não causa problemas. Vamos removê-las para simplificar.
+
     
     runs-on: ubuntu-latest
 
@@ -28,11 +27,11 @@ jobs:
           cache: maven
 
       - name: 3. Construir, Testar e Instalar (Executa Testes Unitários)
-        # O comando 'install' garante que a fase 'test' seja executada.
+
         run: mvn -B install
 
       - name: 4. Publicar Relatórios de Teste (Resultados do Surefire)
-        # Mantivemos a publicação dos relatórios, pois ela é muito útil!
+
         if: always()
         uses: actions/upload-artifact@v4
         with:
